@@ -1,0 +1,367 @@
+/* Skillak luxury UX/UI overrides
+   - dashboard sidebar dark + premium
+   - wallet withdrawal cards polished
+   - mobile readability improvements
+*/
+
+/* Dashboard layout */
+#page-dashboard {
+  background:
+    radial-gradient(circle at top right, rgba(249, 115, 22, .11), transparent 26%),
+    radial-gradient(circle at left center, rgba(21, 101, 192, .09), transparent 28%),
+    linear-gradient(180deg, #f6f9fc 0%, #edf3fb 100%) !important;
+}
+
+#page-dashboard .dashlay {
+  width: min(1520px, calc(100% - 24px));
+  margin: 0 auto 18px;
+  gap: 16px;
+  align-items: start;
+}
+
+#page-dashboard .sidebar {
+  position: sticky;
+  top: calc(var(--nh) + 14px);
+  align-self: start;
+  overflow: hidden;
+  border-radius: 28px;
+  background: linear-gradient(180deg, #081222 0%, #0b1730 52%, #0d1b2f 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .08);
+  box-shadow: 0 22px 50px rgba(8, 18, 34, .22);
+}
+
+#page-dashboard .sbu {
+  padding: 22px 20px 18px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0));
+}
+
+#page-dashboard .sbav {
+  width: 64px;
+  height: 64px;
+  border-radius: 22px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.55rem;
+  font-weight: 900;
+  color: #fff;
+  background: linear-gradient(135deg, #1565c0, #f97316);
+  box-shadow: 0 14px 28px rgba(21, 101, 192, .30);
+  border: 1px solid rgba(255,255,255,.14);
+}
+
+#page-dashboard .sbname {
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.35;
+}
+
+#page-dashboard .sbrole {
+  margin-top: 6px;
+  font-size: .74rem;
+  color: rgba(255,255,255,.62);
+}
+
+#page-dashboard .sbnav {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+#page-dashboard .ni {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  border-radius: 16px;
+  color: rgba(255,255,255,.84);
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.06);
+  transition: transform .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease, color .18s ease;
+  cursor: pointer;
+  font-size: .9rem;
+  font-weight: 700;
+}
+
+#page-dashboard .ni:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.11);
+  box-shadow: 0 12px 18px rgba(0,0,0,.10);
+}
+
+#page-dashboard .ni.act {
+  background: linear-gradient(135deg, rgba(21,101,192,.22), rgba(249,115,22,.18));
+  color: #fff;
+  border-color: rgba(249,115,22,.34);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 16px 24px rgba(0,0,0,.12);
+}
+
+#page-dashboard .nic {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(255,255,255,.08);
+}
+
+#page-dashboard .dashmain {
+  min-width: 0;
+}
+
+#page-dashboard .dashcon {
+  border-radius: 30px;
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(245,249,255,.92)) !important;
+  border: 1px solid rgba(21,101,192,.08);
+  box-shadow: 0 18px 40px rgba(21,101,192,.09);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+#page-dashboard #sklAnnBar {
+  margin: 0 0 16px;
+}
+
+#page-dashboard .skl-ann-shell {
+  border-radius: 30px;
+}
+
+#page-dashboard .skl-ann-track {
+  padding-bottom: 8px;
+}
+
+/* Wallet / withdrawal */
+#page-wallet .walwrap {
+  width: min(1240px, calc(100% - 20px));
+  margin: 0 auto;
+}
+
+#page-wallet .walcard {
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 18px 38px rgba(13, 47, 110, .14);
+}
+
+#page-wallet .amt-grid {
+  gap: 12px;
+}
+
+#page-wallet .amt-btn {
+  border-radius: 18px;
+  min-height: 92px;
+  border: 1px solid rgba(21,101,192,.10);
+  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(244,248,255,.92));
+  box-shadow: 0 10px 24px rgba(21,101,192,.06);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+#page-wallet .amt-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(249,115,22,.22);
+  box-shadow: 0 16px 26px rgba(21,101,192,.10);
+}
+
+#page-wallet .amt-btn.sel,
+#page-wallet .amt-btn.selected {
+  background: linear-gradient(135deg, #1565c0, #0d6e75);
+  color: #fff;
+  border-color: rgba(255,255,255,.08);
+}
+
+#page-wallet .withdraw-method-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-start;
+  text-align: right;
+  padding: 15px 16px;
+  margin-bottom: 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(21,101,192,.12);
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(244,248,255,.95));
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(21,101,192,.06);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+}
+
+#page-wallet .withdraw-method-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px rgba(21,101,192,.10);
+  border-color: rgba(249,115,22,.20);
+}
+
+#page-wallet .withdraw-method-btn.sel {
+  color: #fff;
+  border-color: rgba(255,255,255,.08);
+  background: linear-gradient(135deg, #0d6e75, #1565c0);
+  box-shadow: 0 18px 30px rgba(13,110,117,.22);
+}
+
+#page-wallet .withdraw-method-btn .wm-ic {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(21,101,192,.10);
+  flex: 0 0 auto;
+  font-size: 1.15rem;
+}
+
+#page-wallet .withdraw-method-btn.sel .wm-ic {
+  background: rgba(255,255,255,.16);
+}
+
+#page-wallet #wdAccPanel {
+  padding: 14px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(244,248,255,.9), rgba(255,255,255,.95));
+  border: 1px solid rgba(21,101,192,.08);
+}
+
+#page-wallet #wdAccPanel .fg:last-child {
+  margin-bottom: 0;
+}
+
+#page-wallet .pay-submit-btn {
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f97316, #fb923c);
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 14px 24px rgba(249,115,22,.22);
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+
+#page-wallet .pay-submit-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.01);
+  box-shadow: 0 18px 28px rgba(249,115,22,.28);
+}
+
+#page-wallet .withdraw-req-card {
+  margin-top: 10px;
+  padding: 14px 15px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff, #f7fbff);
+  border: 1px solid rgba(21,101,192,.08);
+  box-shadow: 0 10px 20px rgba(13,47,110,.06);
+}
+
+#page-wallet .wrq-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+#page-wallet .wrq-pending {
+  background: rgba(245,158,11,.13);
+  color: #92400e;
+}
+
+#page-wallet .wrq-approved {
+  background: rgba(16,185,129,.12);
+  color: #065f46;
+}
+
+#page-wallet .wrq-rejected {
+  background: rgba(239,68,68,.12);
+  color: #b91c1c;
+}
+
+#page-wallet #wdHistory .empty {
+  border-radius: 20px;
+}
+
+/* Improve story viewer and mobile polish */
+#sklStoryViewer {
+  background: radial-gradient(circle at top, rgba(21,101,192,.24), transparent 36%), #030712 !important;
+}
+
+/* Responsive */
+@media (max-width: 1150px) {
+  #page-dashboard .dashlay {
+    width: calc(100% - 16px);
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 920px) {
+  #page-dashboard .dashlay {
+    grid-template-columns: 1fr;
+  }
+
+  #page-dashboard .sidebar {
+    position: relative;
+    top: auto;
+    border-radius: 24px;
+  }
+
+  #page-dashboard .sbnav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  #page-dashboard .dashcon {
+    border-radius: 24px;
+  }
+
+  #page-dashboard .skl-ann-shell,
+  #page-wallet .walcard,
+  #page-wallet #wdAccPanel {
+    border-radius: 22px;
+  }
+
+  #page-wallet .amt-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  #page-dashboard .sbnav {
+    grid-template-columns: 1fr;
+  }
+
+  #page-dashboard .ni {
+    padding: 12px 13px;
+    font-size: .86rem;
+  }
+
+  #page-wallet .withdraw-method-btn {
+    padding: 13px 14px;
+  }
+
+  #page-wallet .withdraw-method-btn .wm-ic {
+    width: 40px;
+    height: 40px;
+  }
+
+  #page-wallet .pay-submit-btn {
+    min-height: 50px;
+  }
+}
+
+@media (max-width: 420px) {
+  #page-wallet .amt-grid {
+    gap: 10px;
+  }
+}
