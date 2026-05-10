@@ -9,8 +9,6 @@ const ASSETS = [
   './style_brand.css',
   './patch_master.js',
   './skillak_hotfix.js',
-  './skillak_luxury.css',
-  './skillak_finance_patch.js',
   './skillak.png', './icon-192.png', './icon-512.png',
   './skillak_ads_top_fix.js',
   './manifest.webmanifest'

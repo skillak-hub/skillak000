@@ -28,126 +28,281 @@
     return window.firebase && window.firebase.auth && window.firebase.auth().currentUser;
   }
 
+
+
+function normalizeTarget(v) {
+  v = String(v || 'all').trim().toLowerCase();
+  if (['all', 'everyone', 'any', 'public', 'الجميع', 'الكل', 'عام', 'عامة'].includes(v)) return 'all';
+  if (['tutor', 'teacher', 'teachers', 'معلم', 'المعلم', 'المعلمين', 'معلمون', 'مدرس', 'المدرسين'].includes(v)) return 'tutor';
+  if (['learner', 'student', 'students', 'طلاب', 'الطلاب', 'متعلم', 'المتعلمين', 'متعلمين', 'دارس', 'الدارسين'].includes(v)) return 'learner';
+  return v;
+}
+
+function normalizeRole(v) {
+  v = String(v || '').trim().toLowerCase();
+  if (['teacher', 'teachers', 'tutor', 'معلم', 'مدرس', 'المعلم'].includes(v)) return 'tutor';
+  if (['student', 'students', 'learner', 'طلاب', 'الطلاب', 'متعلم', 'المتعلم'].includes(v)) return 'learner';
+  if (['both', 'dual', 'combined', 'learner/tutor', 'tutor/learner', 'معلم/طالب', 'طالب/معلم', 'الاثنان'].includes(v)) return 'both';
+  if (['admin', 'manager', 'administrator', 'مدير', 'الإدارة'].includes(v)) return 'admin';
+  return v;
+}
+
+function currentRole() {
+  var u = currentUser();
+  var raw = (window.CP && (window.CP.role || window.CP.userType || window.CP.type)) || (u && u.role) || '';
+  return normalizeRole(raw);
+}
+
+function getBroadcastTarget(item) {
+  return normalizeTarget(
+    item && (
+      item.target ||
+      item.audience ||
+      item.to ||
+      item.group ||
+      item.recipient ||
+      item.toRole ||
+      item.targetRole ||
+      item.role ||
+      item.for ||
+      item.visibility ||
+      'all'
+    )
+  );
+}
+
+function roleMatchesTarget(role, target) {
+  role = normalizeRole(role);
+  target = normalizeTarget(target);
+  if (!role) return false;
+  if (role === 'admin') return true;
+  if (target === 'all') return true;
+  if (target === 'tutor') return role === 'tutor' || role === 'both';
+  if (target === 'learner') return role === 'learner' || role === 'both';
+  return true;
+}
+
+function shouldShowBroadcast(item) {
+  return roleMatchesTarget(currentRole(), getBroadcastTarget(item));
+}
+
+function normalizeImageUrl(url) {
+  url = String(url || '').trim();
+  if (!url) return '';
+  if (url.startsWith('data:image/')) return url;
+  if (url.startsWith('blob:')) return url;
+  if (/drive\.google\.com|docs\.google\.com/.test(url)) {
+    var m = url.match(/\/d\/([a-zA-Z0-9_-]+)/)
+      || url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+      || url.match(/\/uc\?id=([a-zA-Z0-9_-]+)/)
+      || url.match(/\/thumbnail\?id=([a-zA-Z0-9_-]+)/)
+      || url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (m && m[1]) return 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1600';
+  }
+  if (/lh3\.googleusercontent\.com|googleusercontent\.com/.test(url)) return url;
+  if (/dropbox\.com/.test(url)) return url.replace('?dl=0', '?raw=1');
+  if (url.startsWith('gs://')) return '';
+  return url.replace(/\s/g, '%20');
+}
+
+function getBroadcastImage(item) {
+  var raw = item && (
+    item.imageUrl || item.image || item.photo || item.img || item.mediaUrl ||
+    item.banner || item.cover || item.picture || item.poster || item.thumb || ''
+  );
+  return normalizeImageUrl(raw);
+}
+
+
   /* ─── ANNOUNCEMENT BAR ────────────────────────────────────────── */
-  /* sklAnnBar مبنيّ في HTML فوق dashlay تماماً — لا ينهار أبداً */
+  var _annUnsub = null;
+  var _annItems = [];
+  var _annRole = '';
+  var _storyIdx = 0;
 
-  var _annUnsub = null;   /* Firestore listener */
-  var _annItems = [];     /* آخر قائمة إعلانات */
+  function _norm(v) {
+    return String(v || '').trim().toLowerCase();
+  }
 
-  /* يُستدعى مرة واحدة بعد تسجيل الدخول */
+  function _currentRole() {
+    if (window.CP && window.CP.role) return _norm(window.CP.role);
+    if (_annRole) return _annRole;
+    return '';
+  }
+
+  function _isTutorLike(role) {
+    role = _norm(role);
+    return ['tutor', 'both', 'admin', 'teacher', 'معلم', 'معلم/طالب'].includes(role);
+  }
+
+  function _isLearnerLike(role) {
+    role = _norm(role);
+    return ['learner', 'both', 'admin', 'student', 'متعلم', 'طالب'].includes(role);
+  }
+
+  function _matchesTarget(target, role) {
+    target = _norm(target) || 'all';
+    role = _norm(role);
+    if (target === 'all') return true;
+    if (target === 'tutor') return _isTutorLike(role);
+    if (target === 'learner') return _isLearnerLike(role);
+    return true;
+  }
+
+  function _resolveAnnImage(url) {
+    var u = String(url || '').trim();
+    if (!u) return '';
+    if (/^data:image\//i.test(u)) return u;
+
+    // Google Drive share links
+    var m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/i)
+      || u.match(/[?&]id=([a-zA-Z0-9_-]+)/i)
+      || u.match(/\/d\/([a-zA-Z0-9_-]+)/i);
+    if (m && m[1] && /drive\.google\.com/i.test(u)) {
+      return 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(m[1]);
+    }
+    if (/drive\.google\.com/i.test(u) && /thumbnail\?id=/i.test(u)) {
+      return u.replace(/export=(download|view)/i, 'export=view');
+    }
+
+    // Dropbox
+    if (/dropbox\.com/i.test(u)) {
+      return u.replace(/\?dl=0/i, '?raw=1').replace(/\?dl=1/i, '?raw=1');
+    }
+
+    // Google Photos / standard direct URLs are kept as-is
+    return u;
+  }
+
+  function _safeImgHtml(url, cls) {
+    if (!url) return '<div class="' + cls + ' is-fallback"></div>';
+    return '<img class="' + cls + '-img" src="' + esc(url) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();this.parentElement.classList.add(\'is-fallback\')">';
+  }
+
   function initAnnouncements(uid) {
-    /* إيقاف المستمع القديم إن وُجد */
     if (_annUnsub) { try { _annUnsub(); } catch(_){} _annUnsub = null; }
 
-    /* استمع لـ adminBroadcasts مباشرةً — لا نحتاج فلتر toUid */
-    _annUnsub = db.collection('adminBroadcasts')
-      .orderBy('createdAt', 'desc')
-      .limit(20)
-      .onSnapshot(function(snap) {
-        _annItems = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+    function startListener() {
+      _annUnsub = db.collection('adminBroadcasts')
+        .orderBy('createdAt', 'desc')
+        .limit(20)
+        .onSnapshot(function(snap) {
+          _annItems = snap.docs.map(function(d){ return Object.assign({ id: d.id }, d.data()); });
+          renderAnnBar();
+        }, function(err) {
+          console.warn('[Skillak] announcements error:', err.message || err);
+        });
+    }
+
+    if (_currentRole()) {
+      startListener();
+      return;
+    }
+
+    if (uid) {
+      db.collection('users').doc(uid).get().then(function(s) {
+        if (s.exists && s.data() && s.data().role) _annRole = _norm(s.data().role);
+        startListener();
         renderAnnBar();
-      }, function(err) {
-        console.warn('[Skillak] announcements error:', err.message || err);
+      }).catch(function() {
+        startListener();
       });
+      return;
+    }
+
+    startListener();
   }
 
   function renderAnnBar() {
     var bar = byId('sklAnnBar');
     if (!bar) return;
 
-    if (!_annItems.length) {
+    var role = _currentRole();
+    if (!role) {
       bar.style.display = 'none';
-      bar.innerHTML = '';
+      window._sklAnnItems = [];
       return;
     }
 
+    var items = _annItems.filter(function(item) {
+      return _matchesTarget(item.target, role);
+    });
+
+    if (!items.length) {
+      bar.style.display = 'none';
+      bar.innerHTML = '';
+      window._sklAnnItems = [];
+      return;
+    }
+
+    window._sklAnnItems = items;
     bar.className = 'skl-ann-bar';
     bar.style.cssText = [
       'display:block',
       'width:100%',
       'padding:0',
       'box-sizing:border-box',
-      'background:transparent',
+      'background:transparent'
     ].join(';');
 
-    var readSet = _getReadSet();
-    var unread  = _annItems.filter(function(x){ return !readSet[x.id]; }).length;
+    var unread = items.length;
 
     bar.innerHTML =
       '<section class="skl-ann-shell">'
       + '<div class="skl-ann-head">'
-      + '<div class="skl-ann-title-wrap">'
-      + '<span class="skl-ann-ic">📢</span>'
-      + '<div>'
-      + '<div class="skl-ann-title">الإعلانات</div>'
-      + '<div class="skl-ann-sub">آخر التحديثات والتنبيهات المهمة</div>'
-      + '</div>'
-      + (unread ? '<span class="skl-ann-badge">' + unread + ' جديد</span>' : '')
-      + '</div>'
-      + '<button type="button" class="skl-ann-mark" onclick="_sklMarkAllRead()">تحديد كمقروء</button>'
+      +   '<div class="skl-ann-title-wrap">'
+      +     '<div class="skl-ann-ic">📢</div>'
+      +     '<div style="min-width:0">'
+      +       '<div class="skl-ann-title">الإعلانات</div>'
+      +       '<div class="skl-ann-sub">آخر التحديثات والتنبيهات المهمة</div>'
+      +     '</div>'
+      +   '</div>'
+      +   (unread ? '<span class="skl-ann-badge">' + unread + ' إعلان</span>' : '')
       + '</div>'
       + '<div class="skl-ann-track">'
-      + _annItems.map(function(item, idx) {
-          var isRead = !!readSet[item.id];
-          var bg     = item.imageUrl
-            ? 'background:url(' + esc(item.imageUrl) + ') center/cover no-repeat,#0d47a1'
-            : 'background:linear-gradient(135deg,#0d2355 0%,#1565c0 55%,#1976d2 100%)';
-          var cls    = 'skl-ann-card' + (isRead ? ' is-read' : ' is-unread');
-          var title   = esc(item.title || 'إعلان');
-          var message = esc((item.message || '').slice(0, 70));
-          var link    = item.link ? '<a class="skl-ann-link" href="' + esc(item.link) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">معرفة المزيد</a>' : '';
-
-          return '<article class="' + cls + '" onclick="_sklOpenStory(' + idx + ')" style="' + bg + '">'
-            + (!isRead
-               ? '<div class="skl-ann-dot" aria-hidden="true"></div>'
-               : '')
+      +   items.map(function(item, idx) {
+          var img = _resolveAnnImage(item.imageUrl || item.image || item.img || item.photo || item.cover || '');
+          var targetLabel = ({all:'الجميع', tutor:'المعلمون', learner:'الطلاب'})[_norm(item.target)] || 'الجميع';
+          var dt = item.createdAt && item.createdAt.toDate ? item.createdAt.toDate().toLocaleDateString('ar-EG', { year:'numeric', month:'short', day:'numeric' }) : '';
+          var mediaClass = img ? 'skl-ann-media' : 'skl-ann-media is-fallback';
+          return '<article class="skl-ann-card" onclick="_sklOpenStory(' + idx + ')">'
+            + (img ? '<div class="' + mediaClass + '">' + _safeImgHtml(img, 'skl-ann-media') + '</div>' : '<div class="' + mediaClass + '"></div>')
             + '<div class="skl-ann-overlay">'
-            + '<div class="skl-ann-card-title">' + title + '</div>'
-            + '<div class="skl-ann-card-text">' + message + '</div>'
-            + link
+            +   '<div class="skl-ann-topline">'
+            +     '<span class="skl-ann-chip">' + esc(targetLabel) + '</span>'
+            +     (dt ? '<span class="skl-ann-date">' + esc(dt) + '</span>' : '')
+            +   '</div>'
+            +   '<div class="skl-ann-card-title">' + esc(item.title || 'إعلان رسمي') + '</div>'
+            +   '<div class="skl-ann-card-text">' + esc(String(item.message || '').slice(0, 140)) + '</div>'
+            +   (item.link ? '<a class="skl-ann-link" href="' + esc(item.link) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 معرفة المزيد</a>' : '')
             + '</div>'
             + '</article>';
         }).join('')
       + '</div>'
       + '</section>';
-
-    window._sklAnnItems = _annItems;
   }
+
+  window.refreshAnnouncements = renderAnnBar;
 
   /* ── تخزين الإعلانات المقروءة في localStorage ── */
   function _getReadSet() {
-    try {
-      return JSON.parse(localStorage.getItem('_sklAnnRead') || '{}');
-    } catch(_){ return {}; }
+    try { return JSON.parse(localStorage.getItem('_sklAnnRead') || '{}'); } catch(_) { return {}; }
   }
   function _saveReadSet(obj) {
     try { localStorage.setItem('_sklAnnRead', JSON.stringify(obj)); } catch(_){}
   }
 
-  window._sklMarkAllRead = function () {
-    var s = _getReadSet();
-    _annItems.forEach(function(x){ s[x.id] = true; });
-    _saveReadSet(s);
-    renderAnnBar();
-    showToast('تم تحديد الكل كمقروء', 'suc');
-  };
-
-  /* ─── STORY VIEWER ────────────────────────────────────────────── */
-  var _storyIdx = 0;
-
   window._sklOpenStory = window.sklOpenStory = function(idx) {
     _storyIdx = idx || 0;
     var v = byId('sklStoryViewer');
     if (!v) return;
-    v.style.display = 'block';
+    v.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     _renderStory();
 
-    /* سجّل كمقروء */
     var items = window._sklAnnItems || _annItems;
     if (items[_storyIdx]) {
       var s = _getReadSet(); s[items[_storyIdx].id] = true; _saveReadSet(s);
-      setTimeout(renderAnnBar, 200);
     }
   };
 
@@ -168,56 +323,49 @@
   function _renderStory() {
     var items = window._sklAnnItems || _annItems;
     if (!items.length) { window.sklCloseStory(); return; }
+
     var item = items[_storyIdx];
     var prog = byId('sklStoryProg');
     var con  = byId('sklStoryContent');
     if (!prog || !con) return;
 
-    prog.innerHTML = items.map(function(_,i){
-      return '<div style="flex:1;height:3px;border-radius:2px;background:'
-        + (i < _storyIdx ? '#fff' : i === _storyIdx ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.22)') + '"></div>';
+    var img = _resolveAnnImage(item.imageUrl || item.image || item.img || item.photo || item.cover || '');
+    var dt  = item.createdAt && item.createdAt.toDate
+      ? item.createdAt.toDate().toLocaleDateString('ar-EG', { year:'numeric', month:'long', day:'numeric' }) : '';
+    var targetLabel = ({all:'الجميع', tutor:'المعلمون', learner:'الطلاب'})[_norm(item.target)] || 'الجميع';
+
+    prog.innerHTML = items.map(function(_, i) {
+      return '<div class="skl-story-seg ' + (i === _storyIdx ? 'is-active' : (i < _storyIdx ? 'is-done' : '')) + '"></div>';
     }).join('');
 
-    var dt = item.createdAt && item.createdAt.toDate
-      ? item.createdAt.toDate().toLocaleDateString('ar-EG',{year:'numeric',month:'long',day:'numeric'}) : '';
+    con.innerHTML =
+      '<div class="skl-story-shell">'
+      +   '<div class="skl-story-media ' + (img ? '' : 'is-fallback') + '">' 
+      +     (img ? '<img class="skl-story-img" src="' + esc(img) + '" alt="" loading="eager" referrerpolicy="no-referrer" onerror="this.remove();this.parentElement.classList.add(\'is-fallback\')">' : '')
+      +   '</div>'
+      +   '<div class="skl-story-body">'
+      +     '<div class="skl-story-meta">'
+      +       '<span class="skl-story-chip">' + esc(targetLabel) + '</span>'
+      +       (dt ? '<span class="skl-story-date">' + esc(dt) + '</span>' : '')
+      +     '</div>'
+      +     '<h3 class="skl-story-title">' + esc(item.title || '') + '</h3>'
+      +     '<div class="skl-story-text">' + esc(item.message || '') + '</div>'
+      +     (item.link ? '<a href="' + esc(item.link) + '" target="_blank" rel="noopener" class="skl-story-link">🔗 معرفة المزيد</a>' : '')
+      +   '</div>'
+      + '</div>';
 
-    var bg = item.imageUrl
-      ? 'background:url(' + esc(item.imageUrl) + ') center/cover no-repeat #111'
-      : 'background:linear-gradient(160deg,#030c20 0%,#0d47a1 50%,#1565c0 100%)';
-
-    con.innerHTML = '<div style="width:100%;height:100%;' + bg + ';position:relative;display:flex;flex-direction:column;justify-content:flex-end">'
-      + '<div style="position:absolute;top:64px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px">'
-      + '<div style="width:50px;height:50px;border-radius:50%;background:rgba(249,115,22,.25);border:2px solid rgba(249,115,22,.6);display:flex;align-items:center;justify-content:center;font-size:1.4rem">📢</div>'
-      + '<div style="color:rgba(255,255,255,.7);font-size:.72rem;text-align:center">' + esc(dt) + '</div>'
-      + '</div>'
-      + '<div style="padding:24px 24px 52px;background:linear-gradient(to top,rgba(0,0,0,.9) 0%,rgba(0,0,0,.55) 60%,transparent 100%)">'
-      + '<div style="color:#f97316;font-size:.72rem;font-weight:700;letter-spacing:.06em;margin-bottom:8px">SKILLAK · إعلان رسمي</div>'
-      + '<div style="color:#fff;font-weight:900;font-size:clamp(1.1rem,4vw,1.45rem);line-height:1.35;margin-bottom:10px">' + esc(item.title||'') + '</div>'
-      + '<div style="color:rgba(255,255,255,.85);font-size:.9rem;line-height:1.65;white-space:pre-wrap">' + esc(item.message||'') + '</div>'
-      + (item.link
-         ? '<a href="' + esc(item.link) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;margin-top:14px;background:linear-gradient(135deg,#f97316,#fb923c);color:#fff;border-radius:12px;padding:10px 20px;font-size:.85rem;font-weight:700;text-decoration:none">🔗 معرفة المزيد</a>'
-         : '')
-      + '<div style="margin-top:14px;display:flex;gap:5px">'
-      + items.map(function(_,i){
-          return '<div style="width:' + (i===_storyIdx?'24px':'8px') + ';height:4px;border-radius:2px;'
-            + 'background:' + (i===_storyIdx?'#f97316':'rgba(255,255,255,.35)') + ';transition:all .3s"></div>';
-        }).join('')
-      + '</div></div></div>';
-
-    /* تنقل بالكيبورد */
     document.onkeydown = function(e) {
       var v = byId('sklStoryViewer');
-      if (!v || v.style.display==='none') return;
-      if (e.key==='ArrowLeft')  window.sklStoryNav(1);
-      if (e.key==='ArrowRight') window.sklStoryNav(-1);
-      if (e.key==='Escape')     window.sklCloseStory();
+      if (!v || v.style.display === 'none') return;
+      if (e.key === 'ArrowLeft')  window.sklStoryNav(1);
+      if (e.key === 'ArrowRight') window.sklStoryNav(-1);
+      if (e.key === 'Escape')     window.sklCloseStory();
     };
 
-    /* swipe */
     var sx = null;
     con.ontouchstart = function(e){ sx = e.touches[0].clientX; };
-    con.ontouchend   = function(e){
-      if (sx===null) return;
+    con.ontouchend = function(e){
+      if (sx === null) return;
       var dx = e.changedTouches[0].clientX - sx;
       if (Math.abs(dx) > 50) window.sklStoryNav(dx > 0 ? 1 : -1);
       sx = null;
@@ -225,6 +373,7 @@
   }
 
   /* ─── PASSWORD RESET (doFgt) ──────────────────────────────────── */
+  /* ─── PASSWORD RESET (doFgt) ──────────────────────────────────── */  /* ─── PASSWORD RESET (doFgt) ──────────────────────────────────── */
   window.doFgt = async function () {
     try {
       var emailEl = byId('liE');
@@ -361,6 +510,8 @@
       firebase.auth().onAuthStateChanged(function(user) {
         if (user) {
           initAnnouncements(user.uid);
+          setTimeout(renderAnnBar, 450);
+          setTimeout(renderAnnBar, 1200);
         } else {
           if (_annUnsub) { try{_annUnsub();}catch(_){} _annUnsub=null; }
           var bar = byId('sklAnnBar');
@@ -373,6 +524,15 @@
   /* عرّف window.loadDashAnnouncements للتوافق مع patch_master */
   window.loadDashAnnouncements = function(uid) {
     /* لا شيء — initAnnouncements يعمل تلقائياً عبر onAuthStateChanged */
+    setTimeout(renderAnnBar, 250);
   };
+
+  window.refreshAnnouncements = function() {
+    renderAnnBar();
+  };
+
+  setInterval(function () {
+    if (_annItems.length) renderAnnBar();
+  }, 2500);
 
 })();

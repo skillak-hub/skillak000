@@ -156,6 +156,23 @@
 
     /* ── APP STATE ── */
     let CU = null, CP = null, walBal = 0;
+    function syncProfileWindow() {
+      try {
+        window.CU = CU || null;
+        window.CP = CP ? { ...CP } : null;
+      } catch (_) {}
+      try {
+        if (typeof window.refreshAnnouncements === 'function') {
+          setTimeout(() => { try { window.refreshAnnouncements(); } catch(_){} }, 80);
+        }
+      } catch (_) {}
+      try {
+        if (typeof window.syncWithdrawVisibility === 'function') {
+          setTimeout(() => { try { window.syncWithdrawVisibility(); } catch(_){} }, 80);
+        }
+      } catch (_) {}
+    }
+
     let allT = [], curT = null, selDate = null, selTime = null;
     let allKnownUsers = {};
     let regRole = 'learner', r3SkList = [], regStep = 1;
@@ -217,41 +234,45 @@
           const s = await db.collection('users').doc(user.uid).get();
           if (s.exists) {
             CP = s.data();
+            syncProfileWindow();
             await loadWal();
             updNavU();
             startMsgL();
-            syncWalletAccessUI();
             if (userDocL) { try { userDocL(); } catch(_){} userDocL = null; }
             if (walletDocL) { try { walletDocL(); } catch(_){} walletDocL = null; }
             userDocL = db.collection('users').doc(user.uid).onSnapshot(sn => {
               if (!sn.exists) return;
               CP = { ...(CP || {}), ...sn.data() };
+              syncProfileWindow();
               updNavU();
             });
             walletDocL = db.collection('wallets').doc(user.uid).onSnapshot(sn => {
               walBal = sn.exists ? (sn.data().balance || 0) : 0;
               const el = document.getElementById('nwAmt'); if (el) el.textContent = walBal.toFixed(2) + ' ج.م';
+              syncWithdrawVisibility();
             });
             console.log('✅ User loaded:', CP.name, '| Role:', CP.role);
           } else {
             // User exists in Auth but not in Firestore - create basic profile
             console.warn('User in Auth but not in Firestore - creating profile');
             CP = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'learner', isApproved: true, rating: 0, totalReviews: 0, totalSessions: 0 };
+            syncProfileWindow();
             await db.collection('users').doc(user.uid).set({ ...CP, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
             await db.collection('wallets').doc(user.uid).set({ balance: 0, userId: user.uid });
             updNavU();
             startMsgL();
-            syncWalletAccessUI();
             if (userDocL) { try { userDocL(); } catch(_){} userDocL = null; }
             if (walletDocL) { try { walletDocL(); } catch(_){} walletDocL = null; }
             userDocL = db.collection('users').doc(user.uid).onSnapshot(sn => {
               if (!sn.exists) return;
               CP = { ...(CP || {}), ...sn.data() };
+              syncProfileWindow();
               updNavU();
             });
             walletDocL = db.collection('wallets').doc(user.uid).onSnapshot(sn => {
               walBal = sn.exists ? (sn.data().balance || 0) : 0;
               const el = document.getElementById('nwAmt'); if (el) el.textContent = walBal.toFixed(2) + ' ج.م';
+              syncWithdrawVisibility();
             });
           }
         } catch (e) { console.error('auth state:', e); }
@@ -774,23 +795,6 @@
       } catch (e) { }
     }
 
-    function isTutorAccount(profile = CP) {
-      const role = String(profile?.role || '').toLowerCase();
-      return ['tutor', 'both', 'admin'].includes(role) || profile?.canWithdraw === true || profile?.payoutEnabled === true || profile?.tutorAccess === true;
-    }
-
-    function syncWalletAccessUI() {
-      const showWithdraw = isTutorAccount();
-      const wCard = document.getElementById('withdrawCard');
-      if (wCard) wCard.style.display = showWithdraw ? 'block' : 'none';
-
-      const hint = document.getElementById('tutorWithdrawHint');
-      if (hint) hint.style.display = showWithdraw ? 'block' : 'none';
-
-      const jump = document.getElementById('jumpWithdrawBtn');
-      if (jump) jump.style.display = showWithdraw ? 'inline-flex' : 'none';
-    }
-
     /* ══════════════════════════════════════════════
        MULTI-METHOD PAYMENT SYSTEM
        ══════════════════════════════════════════════ */
@@ -947,6 +951,27 @@
         }).join('');
     }
 
+
+    function normalizeRole(v) {
+      return String(v || '').trim().toLowerCase();
+    }
+
+    function isTutorRole(role) {
+      role = normalizeRole(role);
+      return ['tutor', 'both', 'admin', 'teacher', 'معلم', 'معلم/طالب'].includes(role);
+    }
+
+    function syncWithdrawVisibility(forceShow) {
+      const wCard = document.getElementById('withdrawCard');
+      if (!wCard) return;
+      const shouldShow = typeof forceShow === 'boolean' ? forceShow : isTutorRole(CP?.role);
+      wCard.style.display = shouldShow ? 'block' : 'none';
+      wCard.hidden = !shouldShow;
+      wCard.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+    }
+
+    window.syncWithdrawVisibility = syncWithdrawVisibility;
+
     async function loadTxList() {
       const el = document.getElementById('txList'); if (!el || !CU) return;
       el.innerHTML = '<div style="padding:28px;text-align:center"><div class="spin" style="margin:0 auto"></div></div>';
@@ -960,8 +985,8 @@
       const wdBal = document.getElementById('wdBal');
       if (wdBal) wdBal.textContent = walBal.toFixed(2) + ' ج.م';
 
-      const isTutor = isTutorAccount();
-      syncWalletAccessUI();
+      const isTutor = isTutorRole(CP?.role);
+      syncWithdrawVisibility(isTutor);
       if (isTutor) loadWdHistory();
 
       const snap = await db.collection('transactions').where('userId', '==', CU.uid).get().catch(() => ({ docs: [] }));
@@ -1597,7 +1622,7 @@
     function buildSb() {
       if (!CP) return;
       const p = CP;
-      const isTutor = p.role === 'tutor' || p.role === 'both' || p.role === 'admin';
+      const isTutor = isTutorRole(p?.role);
       const rMap = { learner: 'متعلم', tutor: 'معلم', both: 'متعلم ومعلم', admin: 'مدير' };
       const sa = document.getElementById('sbAv');
       if (p.photo) sa.innerHTML = `<img src="${p.photo}">`;
@@ -1748,7 +1773,7 @@
 
     async function rdOverview(el) {
       const uid = CU.uid, p = CP;
-      const isTutor = p.role === 'tutor' || p.role === 'both' || p.role === 'admin';
+      const isTutor = isTutorRole(p?.role);
       const [sb, tb] = await Promise.all([
         db.collection('bookings').where('studentId', '==', uid).get().catch(() => ({ docs: [] })),
         db.collection('bookings').where('tutorId', '==', uid).get().catch(() => ({ docs: [] }))
@@ -2039,7 +2064,7 @@
     }
 
     async function rdReviews(el) {
-      const p = CP, isTutor = p.role === 'tutor' || p.role === 'both' || p.role === 'admin';
+      const p = CP, isTutor = isTutorRole(p?.role);
       const snap = await db.collection('reviews').where(isTutor ? 'tutorId' : 'studentId', '==', CU.uid).get().catch(() => ({ docs: [] }));
       const revs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const avg = revs.length ? (revs.reduce((s, r) => s + (r.rating || 0), 0) / revs.length).toFixed(1) : '—';
@@ -2055,7 +2080,7 @@
     async function loadEditProf() {
       if (!CP) return;
       const p = CP;
-      const isTutor = p.role === 'tutor' || p.role === 'both' || p.role === 'admin';
+      const isTutor = isTutorRole(p?.role);
       document.getElementById('editFN').value = p.name?.split(' ')[0] || '';
       document.getElementById('editLN').value = p.name?.split(' ').slice(1).join(' ') || '';
       document.getElementById('editBio').value = p.bio || '';
@@ -2112,7 +2137,7 @@
     async function savePrf() {
       const first = document.getElementById('editFN').value.trim();
       if (!first) { showT('أدخل اسمك الأول', 'err'); return; }
-      const p = CP, isTutor = p.role === 'tutor' || p.role === 'both' || p.role === 'admin';
+      const p = CP, isTutor = isTutorRole(p?.role);
       const data = {
         name: `${first} ${document.getElementById('editLN').value.trim()}`.trim(),
         bio: document.getElementById('editBio').value,
@@ -2141,6 +2166,7 @@
         const freshSnap = await db.collection('users').doc(CU.uid).get();
         if (freshSnap.exists) CP = freshSnap.data();
         else CP = { ...CP, ...data };
+        syncProfileWindow();
         updNavU();
         await loadT(); // Reload all tutors to reflect changes
         showT('✅ تم حفظ الملف الشخصي بنجاح', 'suc');
@@ -2233,9 +2259,6 @@
           lang: 'عربي', country: '', category: '', rating: 0,
           totalReviews: 0, totalSessions: 0,
           isApproved: !isTutor,
-          canWithdraw: isTutor,
-          payoutEnabled: isTutor,
-          tutorAccess: isTutor,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         if (isTutor) {
@@ -2258,6 +2281,7 @@
         await batch.commit();
 
         CP = profile;
+        syncProfileWindow();
         closeM('regMod');
         showT(`🎉 مرحباً ${first}! تم إنشاء حسابك بنجاح.`, 'suc');
         updNavU();
@@ -2334,6 +2358,7 @@
       curChatUid = null; allContacts = {};
       await auth.signOut();
       CP = null; CU = null; walBal = 0;
+      syncProfileWindow();
       updNavG();
       showT('تم تسجيل الخروج بنجاح', 'suc');
       go('home');
@@ -3031,10 +3056,7 @@
         else openM('loginMod');
       }
       if (name === 'wallet') {
-        if (CU) {
-          syncWalletAccessUI();
-          loadTxList();
-        }
+        if (CU) { syncWithdrawVisibility(); loadTxList(); }
         else openM('loginMod');
       }
       if (name === 'editProfile') {

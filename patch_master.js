@@ -356,8 +356,9 @@
           var nw=$id('nwAmt');if(nw)nw.textContent=window.walBal.toFixed(2)+' ج.م';
           var wd=$id('wdBal');if(wd)wd.textContent=window.walBal.toFixed(2)+' ج.م';
         }
-        var isTutor = window.CP && ['tutor','both','admin'].includes(window.CP.role);
-        var wCard = $id('withdrawCard'); if(wCard) wCard.style.display = isTutor?'block':'none';
+        var isTutor = window.CP && ['tutor','both','admin','teacher','معلم'].includes(String(window.CP.role || '').toLowerCase());
+        if (typeof window._sklSyncWithdrawVisibility === 'function') window._sklSyncWithdrawVisibility(isTutor);
+        else { var wCard = $id('withdrawCard'); if(wCard) wCard.style.display = isTutor ? 'block' : 'none'; }
         if (isTutor && typeof window.loadWdHistory==='function') window.loadWdHistory();
 
         var allTxs = txSnap.docs.map(function(d){return Object.assign({id:d.id},d.data());});
@@ -624,7 +625,8 @@
       var body   = bodyEl  ? bodyEl.value.trim()  : '';
       var imgUrl = imgEl   ? imgEl.value.trim()   : '';
       var lnk    = linkEl  ? linkEl.value.trim()  : '';
-      var target = window._annTarget || 'all';
+      var target = String(window._annTarget || 'all').toLowerCase();
+      if (target === 'everyone' || target === 'public') target = 'all';
       if (!title) { _annMsg(msgEl,'أدخل عنوان الإعلان','err'); return; }
       if (!body)  { _annMsg(msgEl,'أدخل محتوى الإعلان','err'); return; }
 
@@ -643,7 +645,7 @@
       try {
         await db.collection('adminBroadcasts').add({
           title:title, message:body, imageUrl:imgUrl||'', link:lnk||'',
-          target:target, sentCount:cnt,
+          target:target, audience:target, to:target, group:target, sentCount:cnt,
           sentBy: firebase.auth().currentUser && firebase.auth().currentUser.uid,
           active: true,
           createdAt: fts()
